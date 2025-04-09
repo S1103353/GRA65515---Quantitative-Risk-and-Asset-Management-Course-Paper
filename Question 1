@@ -1,0 +1,71 @@
+# Import necessary libraries
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from scipy.stats import skew, kurtosis
+
+# Set random seed for reproducibility
+np.random.seed(42)
+
+# Parameters from the assignment
+beta = 0.01     # Scale of returns
+phi = 0.99      # Volatility persistence
+sigma = 0.1     # Volatility shock scale
+rho = -0.8      # Leverage effect
+n_obs = 1_010_000  # Total number of observations
+burn_in = 10_000   # Number of initial samples to discard
+
+# Step 1: Simulate the volatility process
+eps = np.random.normal(0, 1, n_obs)  # Shock to returns
+u = np.random.normal(0, 1, n_obs)    # Shock to volatility
+
+# Initialize h_t (log volatility) and simulate recursively
+ht = np.zeros(n_obs)
+for t in range(1, n_obs):
+    ht[t] = phi * ht[t-1] + rho * sigma * eps[t-1] + sigma * np.sqrt(1 - rho**2) * u[t]
+
+# Step 2: Simulate returns
+rt = beta * np.exp(0.5 * ht) * eps  # Daily log returns
+
+# Remove burn-in samples
+rt = rt[burn_in:]
+ht = ht[burn_in:]
+
+# Step 3: Compute mean and standard deviation of daily returns
+mean_return = np.mean(rt)
+std_return = np.std(rt)
+
+print("Mean of daily log returns:", round(mean_return, 6))
+print("Standard deviation of daily log returns:", round(std_return, 6))
+
+# Step 4: Skewness, Kurtosis, and Value-at-Risk at different horizons
+horizons = [1, 20, 250]
+results = []
+
+for h in horizons:
+    cum_returns = np.array([np.sum(rt[i:i+h]) for i in range(0, len(rt) - h, h)])
+    skewness = skew(cum_returns)
+    excess_kurtosis = kurtosis(cum_returns, fisher=True)
+    var_95 = np.percentile(cum_returns, 5)
+    var_99 = np.percentile(cum_returns, 1)
+    results.append([h, round(skewness, 3), round(excess_kurtosis, 3),
+                    round(var_95, 4), round(var_99, 4)])
+
+# Display results in a table
+results_df = pd.DataFrame(results, columns=[
+    "Horizon", "Skewness", "Kurtosis", "VaR 95%", "VaR 99%"
+])
+print("\nSkewness, Kurtosis, and VaR Table:")
+print(results_df)
+
+# Step 5: Histogram of yearly (250-day) cumulative returns
+yearly_returns = np.array([np.sum(rt[i:i+250]) for i in range(0, len(rt) - 250, 250)])
+plt.figure(figsize=(10, 6))
+plt.hist(yearly_returns, bins=50, edgecolor='black')
+plt.title("Histogram of Yearly Cumulative Log Returns")
+plt.xlabel("Cumulative Return")
+plt.ylabel("Frequency")
+plt.grid(True)
+plt.tight_layout()
+plt.savefig("yearly_returns_histogram.png")  # Saves figure for your report
+plt.show()
