@@ -1,0 +1,97 @@
+# Question 2 Full Python Analysis Script
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from numpy.linalg import inv
+
+# === LOAD AND CLEAN DATA ===
+df = pd.read_csv("Portfolios_Formed_on_OP_Daily.csv", skiprows=22)
+df = df.rename(columns=lambda x: x.strip())
+
+quintiles = ["Lo 20", "Qnt 2", "Qnt 3", "Qnt 4", "Hi 20"]
+returns = df[quintiles]
+if returns.max().max() > 1:
+    returns = returns / 100
+
+daily_rf = 0.07 / 252
+excess_returns = returns - daily_rf
+
+# === Q2.1 ===
+mean_daily = excess_returns.mean()
+std_daily = excess_returns.std()
+annual_return = mean_daily * 252
+annual_volatility = std_daily * np.sqrt(252)
+sharpe_ratio = annual_return / annual_volatility
+
+q2_1_table = pd.DataFrame({
+    "Annualized Return": annual_return,
+    "Annualized Volatility": annual_volatility,
+    "Sharpe Ratio": sharpe_ratio
+}).round(3)
+print("Q2.1 Table:\n", q2_1_table)
+
+# === Q2.2 ===
+cumulative_lo20 = (1 + returns["Lo 20"]).cumprod()
+cumulative_hi20 = (1 + returns["Hi 20"]).cumprod()
+plt.figure(figsize=(10,5))
+plt.plot(cumulative_lo20, label="Lo 20")
+plt.plot(cumulative_hi20, label="Hi 20")
+plt.legend()
+plt.title("Cumulative Returns")
+plt.grid(True)
+plt.show()
+
+# === Q2.3 ===
+final_lo20 = cumulative_lo20.iloc[-1]
+final_hi20 = cumulative_hi20.iloc[-1]
+mean_lo20_daily_excess = excess_returns["Lo 20"].mean()
+print("Final Wealth Lo 20:", final_lo20)
+print("Final Wealth Hi 20:", final_hi20)
+print("Mean Daily Excess Return Lo 20:", mean_lo20_daily_excess)
+
+# === Q2.5 ===
+market_returns = returns.mean(axis=1)
+log_cumulative_market = np.log((1 + market_returns).cumprod())
+plt.figure(figsize=(10,5))
+plt.plot(log_cumulative_market, color='black')
+plt.title("Log Cumulative Return - Market Portfolio")
+plt.grid(True)
+plt.show()
+
+# === Q2.6 ===
+mu = mean_daily.values
+cov_matrix = excess_returns.cov().values
+half_kelly_weights = 0.5 * inv(cov_matrix) @ mu
+print("Half-Kelly Weights:", np.round(half_kelly_weights, 3))
+print("Sum of Weights:", round(half_kelly_weights.sum(), 3))
+print("Sum of Abs Weights:", round(np.abs(half_kelly_weights).sum(), 3))
+
+# === Q2.7 ===
+alpha = 1/3
+D = np.diag(np.diag(cov_matrix))
+V_epo = alpha * cov_matrix + (1 - alpha) * D
+epo_weights = 0.5 * inv(V_epo) @ mu
+print("EPO Weights:", np.round(epo_weights, 3))
+print("Sum of Weights:", round(epo_weights.sum(), 3))
+print("Sum of Abs Weights:", round(np.abs(epo_weights).sum(), 3))
+
+# === Q2.8 ===
+log_returns = np.log(1 + returns)
+market_log = log_returns.mean(axis=1)
+monthly_lo20 = np.array([log_returns["Lo 20"][i:i+21].sum() for i in range(0, len(log_returns)-21+1, 21)])
+monthly_hi20 = np.array([log_returns["Hi 20"][i:i+21].sum() for i in range(0, len(log_returns)-21+1, 21)])
+monthly_market = np.array([market_log[i:i+21].sum() for i in range(0, len(market_log)-21+1, 21)])
+
+correlation_lo20_market = np.corrcoef(monthly_lo20, monthly_market)[0, 1]
+tail_ratio_lo20 = np.percentile(monthly_lo20, 5) / np.std(monthly_lo20)
+tail_ratio_hi20 = np.percentile(monthly_hi20, 5) / np.std(monthly_hi20)
+
+print("Correlation (Lo 20 with Market):", round(correlation_lo20_market, 3))
+print("Tail Risk Lo 20:", round(tail_ratio_lo20, 3))
+print("Tail Risk Hi 20:", round(tail_ratio_hi20, 3))
+
+# === Q2.9 ===
+epo_portfolio_returns = excess_returns @ epo_weights
+sharpe_epo = (epo_portfolio_returns.mean() * 252) / (epo_portfolio_returns.std() * np.sqrt(252))
+print("Sharpe Ratio of EPO Portfolio:", round(sharpe_epo, 3))
